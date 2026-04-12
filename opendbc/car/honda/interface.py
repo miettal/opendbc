@@ -54,6 +54,16 @@ class CarInterface(CarInterfaceBase):
       ret.alphaLongitudinalAvailable = candidate not in HONDA_BOSCH_CANFD
       ret.openpilotLongitudinalControl = alpha_long
       ret.pcmCruise = not ret.openpilotLongitudinalControl
+
+      # N-Box: enable openpilot longitudinal control by default (non-alpha)
+      if candidate == CAR.HONDA_NBOX_2G:
+        ret.alphaLongitudinalAvailable = False
+        ret.openpilotLongitudinalControl = True
+        ret.pcmCruise = False
+        # N-Box has no PCM to absorb accel error (pcmCruise=False) and tends to over-accelerate
+        # Add PI correction: without ki, overshoot goes uncorrected (aEgo >> acmd during accel)
+        ret.longitudinalTuning.kiBP = [0., 5., 35.]
+        ret.longitudinalTuning.kiV = [0.5, 0.35, 0.2]
     else:
       ret.safetyConfigs = [get_safety_config(structs.CarParams.SafetyModel.hondaNidec)]
       ret.openpilotLongitudinalControl = True

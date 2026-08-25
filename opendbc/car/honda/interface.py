@@ -188,8 +188,22 @@ class CarInterface(CarInterfaceBase):
       ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 4096], [0, 4096]]  # TODO: determine if there is a dead zone at the top end
       ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.38], [0.11]]
 
-    elif candidate in (CAR.HONDA_INSIGHT, CAR.HONDA_NBOX_2G):
+    elif candidate == CAR.HONDA_INSIGHT:
       ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 4096], [0, 4096]]  # TODO: determine if there is a dead zone at the top end
+      ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.6], [0.18]]
+
+    elif candidate == CAR.HONDA_NBOX_2G:
+      # EPS firmware (39990-TTA-J040) clamps the LKAS command to +-0x333 (819) before scaling
+      # x2.5 to the physical motor limit (+-2048); values above 819 on the CAN 0xE4 message
+      # (+-4096 range) are silently dropped by the EPS, confirmed via firmware reverse engineering.
+      # torqueBP/V previously mirrored HONDA_INSIGHT's +-4096, so normalized PID output only
+      # needed to reach 0.2 to hit the real actuator ceiling: the PID's own anti-windup (which
+      # triggers at output +-1.0) never engaged, and the last 80% of the output range did nothing.
+      # Correcting the scale to +-819 makes the PID's saturation point match the real one.
+      # kp/ki left at the HONDA_INSIGHT-derived values for now (real-world torque-per-error is
+      # ~5x weaker than before until retuned) -- collect drive logs on this baseline first, then
+      # retune kp/ki/kf from measured tracking error instead of guessing the compensating factor.
+      ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 819], [0, 819]]
       ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.6], [0.18]]
 
     elif candidate in (CAR.HONDA_E, CAR.HONDA_E_ADVANCE):

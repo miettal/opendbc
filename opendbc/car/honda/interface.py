@@ -193,24 +193,21 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.6], [0.18]]
 
     elif candidate == CAR.HONDA_NBOX_2G:
-      # EPS firmware (39990-TTA-J040) clamps the LKAS command to +-0x333 (819) before scaling
-      # x2.5 to the physical motor limit (+-2048); values above 819 on the CAN 0xE4 message
-      # (+-4096 range) are silently dropped by the EPS, confirmed via firmware reverse engineering.
-      # torqueBP/V previously mirrored HONDA_INSIGHT's +-4096: with kp=0.6 the PID's own output
-      # already saturates to +-1.0 for any error over ~1.67deg (1/kp), but at the old +-4096 scale
-      # that saturated output maps to a CAN value that hits the EPS's 819 clamp -- i.e. full real
-      # torque -- once the *normalized* output exceeds just 819/4096=0.2, i.e. an error over ~0.33deg.
-      # So in practice the EPS was getting max torque for almost any nonzero error.
-      # Correcting torqueBP/V to +-819 alone (kp/ki unchanged) was verified on a drive log to make
-      # real torque ~5x weaker for the common 0.33-1.67deg error range (confirmed as "barely any
-      # assist" on-road) -- the PID's normalized saturation point didn't move, but the CAN scale
-      # under it shrank, so more of the input range now maps to sub-max torque instead of the
-      # instant full-send the old, incorrect +-4096 scale produced.
-      # kp/ki are scaled by the same 4096/819~=5.0 factor to reproduce the exact same torque-per-error
-      # curve as before the rescale, while keeping the corrected, physically-accurate +-819 scale.
-      # This is a like-for-like baseline, not a new tune -- next iteration should tune from here.
-      ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 819], [0, 819]]
-      ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[3.0], [0.9]]
+      # Firmware reverse engineering of the EPS (39990-TTA-J040) suggested the LKAS command is
+      # clamped to +-0x333 (819) internally before scaling to the physical motor limit (+-2048),
+      # which would make values above 819 on the CAN 0xE4 message (+-4096 range) a no-op. That
+      # theory was tested on-road: torqueBP/V=[0,819] with kp/ki rescaled to reproduce the exact
+      # same torque-per-error curve as torqueBP/V=[0,4096]+kp=0.6/ki=0.18 (see git history on this
+      # branch) produced clearly weaker real-world assist than the original +-4096 config -- the
+      # opposite of what the clamp theory predicts (both should have delivered identical real
+      # torque). So the firmware clamp does not appear to reflect what the real vehicle does;
+      # sticking with the un-scaled, empirically-verified +-4096 range.
+      # The actual on-road problem is overshoot/oscillation, not insufficient torque: kp/ki were
+      # only ever a copy-paste from HONDA_INSIGHT (a much heavier hybrid sedan), never tuned for
+      # this specific, much lighter kei car. Halving both as a first, cautious step to reduce
+      # overshoot -- needs further on-road iteration, not a final tune.
+      ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 4096], [0, 4096]]
+      ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.3], [0.09]]
 
     elif candidate in (CAR.HONDA_E, CAR.HONDA_E_ADVANCE):
       ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 4096], [0, 4096]]  # TODO: determine if there is a dead zone at the top end

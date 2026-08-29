@@ -219,8 +219,19 @@ class CarInterface(CarInterfaceBase):
       # - steerActuatorDelay raised to 0.15 (from the untuned 0.1 default) to match the fallback
       #   value used by newer/less-common Honda Bosch platforms in the `else` branch below; NBOX's
       #   EPS is similarly non-standard and was never measured, so 0.1 was a guess, not a finding.
+      #   (A liveDelay-based measurement was attempted from historical drive logs, but never
+      #   reached a validated block count; the ~0.6-0.7s partial readings it produced came from too
+      #   little data to trust and were not adopted.)
+      # - kp/ki made speed-dependent: binning the same drive log by vEgo showed tracking error and
+      #   output usage both drop steadily as speed rises (18-36km/h: |err| median 1.46deg/p90 12deg;
+      #   36-54km/h: 0.81/3.71deg; 54-72km/h: 0.39/0.98deg), with city-speed driving the hardest to
+      #   track -- likely because the v_ego^2-scaled feedforward contributes little at low speed,
+      #   leaving P/I to do more of the work exactly where it's already struggling. Boosting kp/ki at
+      #   low speed and tapering down by highway speed targets that gap without touching the
+      #   already-comfortable higher-speed behavior. Needs on-road validation.
       ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 4096], [0, 4096]]
-      ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.25], [0.075]]
+      ret.lateralTuning.pid.kpBP, ret.lateralTuning.pid.kpV = [[10., 20.], [0.30, 0.20]]
+      ret.lateralTuning.pid.kiBP, ret.lateralTuning.pid.kiV = [[10., 20.], [0.09, 0.06]]
       ret.lateralTuning.pid.kf = 0.00018
       ret.steerActuatorDelay = 0.15
 

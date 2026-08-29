@@ -204,10 +204,25 @@ class CarInterface(CarInterfaceBase):
       # sticking with the un-scaled, empirically-verified +-4096 range.
       # The actual on-road problem is overshoot/oscillation, not insufficient torque: kp/ki were
       # only ever a copy-paste from HONDA_INSIGHT (a much heavier hybrid sedan), never tuned for
-      # this specific, much lighter kei car. Halving both as a first, cautious step to reduce
-      # overshoot -- needs further on-road iteration, not a final tune.
+      # this specific, much lighter kei car. Halving both measurably cut oscillation on-road
+      # (sign-flip rate 177.9/min -> 120.3/min, angleError stddev 38.2deg -> 25.1deg) while still
+      # reaching full output when needed (saturated ~0.1% of active samples either way).
+      # Further iteration on top of that baseline:
+      # - kf raised 3x (0.00006 -> 0.00018): the default feedforward (kf * desired_angle * v_ego^2)
+      #   is dominated by v_ego^2, so at the low city speeds this car mostly sees, FF contributes
+      #   very little and P/I (reactive, error-after-the-fact) does nearly all the work -- a likely
+      #   contributor to the remaining oscillation. Raising kf lets the controller anticipate the
+      #   torque a curve needs instead of only reacting to tracking error.
+      # - kp/ki cut a further ~15% (0.3/0.09 -> 0.25/0.075) to keep chipping at the still-present
+      #   oscillation (sign flips, angleError stddev) without re-introducing the original
+      #   "can't hold the curve" complaint -- go slower here than the first halving.
+      # - steerActuatorDelay raised to 0.15 (from the untuned 0.1 default) to match the fallback
+      #   value used by newer/less-common Honda Bosch platforms in the `else` branch below; NBOX's
+      #   EPS is similarly non-standard and was never measured, so 0.1 was a guess, not a finding.
       ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 4096], [0, 4096]]
-      ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.3], [0.09]]
+      ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.25], [0.075]]
+      ret.lateralTuning.pid.kf = 0.00018
+      ret.steerActuatorDelay = 0.15
 
     elif candidate in (CAR.HONDA_E, CAR.HONDA_E_ADVANCE):
       ret.lateralParams.torqueBP, ret.lateralParams.torqueV = [[0, 4096], [0, 4096]]  # TODO: determine if there is a dead zone at the top end
